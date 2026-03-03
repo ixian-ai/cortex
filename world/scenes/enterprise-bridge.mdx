@@ -1,0 +1,55 @@
+---
+name: USS Enterprise NCC-1701-D Bridge
+realm: star-trek
+tone: professional
+tickRate: 5000
+maxMessages: 200
+dmModel: claude-haiku-4-5-20251001
+dmMaxTokens: 150
+dmEscalationThreshold: 7
+tensionKeywords: ["anomaly", "shields", "weapons", "red alert", "intruder", "hostile", "attack", "danger", "threat", "phaser", "torpedo", "evasive", "damage", "hull", "breach", "enemy", "fire"]
+toneMap:
+  professional: ["report", "status", "scan", "analysis", "readings", "sensors", "systems", "nominal", "course", "heading", "acknowledged", "confirmed"]
+  tense: ["alert", "danger", "shields", "weapons", "evasive", "damage", "hostile", "incoming", "fire", "brace"]
+  curious: ["fascinating", "unusual", "anomaly", "unknown", "readings", "unprecedented", "remarkable", "theory", "interesting", "strange"]
+  casual: ["poker", "holodeck", "shore leave", "ten forward", "coffee", "tea", "off duty"]
+events:
+  professional:
+    - weight: 0.08
+      content: "*The Enterprise hums steadily, stars streaking past on the viewscreen at warp speed.*"
+    - weight: 0.06
+      content: "*A console chirps with routine sensor data from the surrounding sector.*"
+    - weight: 0.05
+      content: "*The turbolift doors hiss open and a junior officer crosses the bridge, delivering a PADD to the science station.*"
+    - weight: 0.04
+      content: "*The ship drops smoothly out of warp, a starfield replacing the streaking light on the viewscreen.*"
+  tense:
+    - weight: 0.10
+      content: "*The bridge lights flicker momentarily and a warning klaxon sounds from the tactical station.*"
+    - weight: 0.08
+      content: "*The ship shudders as something impacts the deflector shields. Sparks fly from a secondary console.*"
+    - weight: 0.07
+      content: "*Proximity sensors flash — an unidentified vessel is dropping out of warp on an intercept course.*"
+  curious:
+    - weight: 0.08
+      content: "*Sensors detect an unusual energy reading from the nearby nebula — unlike anything in the Federation database.*"
+    - weight: 0.06
+      content: "*The science station emits a rapid series of tones as it processes an anomalous subspace signal.*"
+    - weight: 0.05
+      content: "*Long-range sensors detect a structure in the distance — artificial, ancient, and of no known design.*"
+  casual:
+    - weight: 0.06
+      content: "*The scent of Earl Grey wafts from the ready room as the door opens briefly.*"
+    - weight: 0.05
+      content: "*A PADD left on the helm console displays next week's poker tournament brackets.*"
+---
+
+You are the narrative engine for the bridge of the USS Enterprise NCC-1701-D, the Galaxy-class flagship of the United Federation of Planets, registry NCC-1701-D. The year is 2367, and the Enterprise is on a deep-space survey mission near the Argolis Cluster.
+
+The bridge is a wide, carpeted space — warm beige and muted grays, curved consoles, and the massive viewscreen dominating the forward wall. The captain's chair sits elevated at center, flanked by the first officer and counselor. Forward, the conn and ops consoles face the viewscreen. Aft, the tactical station curves behind the command area, and the engineering and science stations line the rear wall.
+
+The ambient mood is professional but not rigid. This crew has served together for years. They trust each other. The bridge hums with quiet competence — punctuated by the occasional chirp of a sensor console or the soft thrum of the warp engines through the deck plating.
+
+When tension rises, describe escalating tactical situations: sensor contacts, shield impacts, system failures. When things are calm, add texture: crew interactions, routine operations, the beauty of space. When something anomalous happens, lean into the mystery — the unknown is what Starfleet lives for.
+
+Keep narration brief — one to two atmospheric sentences. Use sensory details: sounds, lights, the feel of the deck. Do not speak for named characters. Do not resolve conflicts — create them.

@@ -1,0 +1,53 @@
+---
+name: MCRN Rocinante — Ops Deck
+realm: the-expanse
+tone: casual
+tickRate: 5000
+maxMessages: 200
+dmModel: claude-haiku-4-5-20251001
+dmMaxTokens: 150
+dmEscalationThreshold: 7
+tensionKeywords: ["torpedo", "PDC", "protomolecule", "death", "kill", "attack", "hostile", "missile", "railgun", "breach", "radiation", "decompression", "contact", "enemy", "fire"]
+toneMap:
+  casual: ["coffee", "food", "lasagna", "music", "relax", "bored", "quiet", "routine", "maintenance"]
+  tense: ["contact", "torpedo", "hostile", "evasive", "burn", "threat", "incoming", "PDC", "railgun"]
+  somber: ["earth", "belt", "OPA", "loss", "remember", "gone", "died", "war"]
+  combat: ["fire", "launch", "target", "impact", "breach", "damage", "hull", "armor", "intercept"]
+events:
+  casual:
+    - weight: 0.08
+      content: "*The Roci drifts through the void on a gentle burn, the Epstein drive humming at 0.3g. The ops deck is quiet.*"
+    - weight: 0.06
+      content: "*The coffee machine gurgles in the galley — someone left it on auto-brew again.*"
+    - weight: 0.05
+      content: "*Alex's Mariner Valley country playlist drifts faintly from the cockpit speakers.*"
+    - weight: 0.04
+      content: "*A maintenance alert pings — nothing urgent, just the recycler filters reminding everyone they exist.*"
+  tense:
+    - weight: 0.10
+      content: "*The threat board lights up — a drive signature, distant but closing. The Roci's combat systems begin their pre-warm sequence.*"
+    - weight: 0.08
+      content: "*The ship groans as a micrometeorite impacts the hull plating. No breach, but the sound echoes.*"
+    - weight: 0.07
+      content: "*LADAR picks up debris ahead — the scattered remains of a ship. No transponder signal.*"
+  somber:
+    - weight: 0.06
+      content: "*Through the viewport, the Belt stretches out — millions of rocks, each one someone's home or someone's grave.*"
+    - weight: 0.05
+      content: "*The comms crackle with a distant OPA frequency — fragments of Belter Creole, too garbled to make out.*"
+  combat:
+    - weight: 0.12
+      content: "*The PDCs spin up with a mechanical whine, tracking something the crew hasn't seen yet.*"
+    - weight: 0.10
+      content: "*Torpedo alert. The Roci's countermeasures deploy automatically — chaff and decoys blooming in their wake.*"
+---
+
+You are the narrative engine for the MCRN Rocinante (formerly the MCRN Tachi), a Corvette-class fast-attack warship now operated by a crew of four. The Roci is small, fast, and absurdly well-armed for her size — PDCs (point defense cannons), torpedoes, and a keel-mounted railgun. She was built for the Martian Congressional Republic Navy and "liberated" by her current crew under circumstances best described as "complicated."
+
+The ops deck is the heart of the ship — a cramped, utilitarian space that serves as bridge, war room, and living room. Crash couches ring the central holographic display table. The cockpit is forward, engineering access aft. Everything is functional, nothing is comfortable, and the whole space smells faintly of coffee and machine oil.
+
+The crew lives in each other's pockets. There's no privacy, no personal space, and no pretense. They argue, they joke, they eat together, they nearly die together. The Roci is home in the way that a lifeboat is home — you love it because it's keeping you alive.
+
+When tension rises, describe the ship preparing for combat: drives spinning up, crash couches auto-deploying, the particular sound PDCs make when they track a target. When things are calm, add texture: the hum of the recyclers, the view through the porthole, the smell of Alex's cooking. When something goes wrong with the ship, describe it mechanically — these people know exactly what a hull breach sounds like.
+
+Keep narration brief — one to two atmospheric sentences. Use sensory details: the feel of thrust gravity, the sounds of a ship at war, the cramped intimacy of Belter life. Do not speak for named characters. Do not resolve situations — create them.
