@@ -1,0 +1,59 @@
+---
+name: The Prancing Pony
+type: scene
+realm: middle-earth
+tone: calm
+tickRate: 5000
+maxMessages: 200
+dmModel: claude-haiku-4-5-20251001
+dmMaxTokens: 150
+dmEscalationThreshold: 8
+tensionKeywords: [sword, fight, danger, nazgul, shadow, enemy, kill, attack, dark, rider, ring, mordor, death, war, orc]
+toneMap:
+  jovial: [laugh, joke, ale, drink, song, merry, cheer, toast, dance, feast]
+  somber: [death, burden, doom, ring, dark, shadow, lost, grief, fallen, end]
+  tense: [sword, danger, enemy, watch, quiet, careful, hide, flee, weapon, guard]
+events:
+  calm:
+    - weight: 0.02
+      content: "The tavern door creaks open as a gust of cold wind sweeps through the room, making the candle flames dance."
+    - weight: 0.015
+      content: "A log shifts in the fireplace, sending a shower of sparks up the chimney. The warmth pulses outward."
+    - weight: 0.025
+      content: "The bard in the corner plucks a melancholy chord, then thinks better of it and switches to a lively drinking song."
+    - weight: 0.03
+      content: "A serving wench weaves between the tables, refilling mugs. The smell of roasted meat and fresh bread fills the air."
+    - weight: 0.02
+      content: "A cat leaps onto the bar, knocking over an empty tankard. The barkeep shoos it away with a muttered oath."
+  tense:
+    - weight: 0.03
+      content: "The tavern falls quiet for a moment. Someone near the door has stopped talking and is listening."
+    - weight: 0.02
+      content: "A cold draft sweeps under the door. The fire gutters and, for an instant, the shadows seem to lean inward."
+    - weight: 0.015
+      content: "Heavy boots on the cobblestones outside. They stop just beyond the door. Then silence."
+    - weight: 0.02
+      content: "The barkeep glances nervously toward your table, then looks away quickly when he catches your eye."
+  jovial:
+    - weight: 0.04
+      content: "Laughter erupts from a table of dwarves playing dice in the corner. One of them slams the table in triumph."
+    - weight: 0.03
+      content: "The bard launches into a crowd favorite. Half the tavern joins in on the chorus, tankards raised."
+    - weight: 0.025
+      content: "A round of drinks arrives unbidden — courtesy of the merry fellow at the bar who's celebrating something or other."
+  somber:
+    - weight: 0.02
+      content: "The bard's song trails off into a minor key. A few patrons stare into their cups."
+    - weight: 0.015
+      content: "Rain begins to tap against the windows. The tavern feels smaller, somehow."
+    - weight: 0.01
+      content: "An old man in the corner raises his mug to no one, murmurs a name, and drinks alone."
+---
+
+# The Prancing Pony
+
+A weathered inn at the crossroads of Bree, frequented by travelers, rangers, hobbits, and the occasional dwarf. The common room is large and low-ceilinged, warmed by a great fireplace and lit by flickering candles. The air smells of pipe smoke, roasting meat, and spilled ale. It is a place where secrets are traded in whispers and strangers are watched from the corners of eyes.
+
+## DM Instructions
+
+You are the narrator for The Prancing Pony. Generate environmental descriptions only — never dialogue. Your events should respond to the current mood: heighten tension when things are tense, provide relief when things are jovial, deepen atmosphere when things are somber. One to two sentences maximum. Never name the main characters directly — describe what they might notice happening around them.

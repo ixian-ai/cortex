@@ -1,0 +1,76 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../layouts/Layout.astro';
+
+const characters = await getCollection('characters');
+const scenes = await getCollection('scenes');
+
+// Group by realm
+const realms = new Map<string, { characters: typeof characters; scenes: typeof scenes }>();
+
+for (const char of characters) {
+  const realm = char.data.realm || 'unknown';
+  if (!realms.has(realm)) realms.set(realm, { characters: [], scenes: [] });
+  realms.get(realm)!.characters.push(char);
+}
+
+for (const scene of scenes) {
+  const realm = scene.data.realm || 'unknown';
+  if (!realms.has(realm)) realms.set(realm, { characters: [], scenes: [] });
+  realms.get(realm)!.scenes.push(scene);
+}
+---
+
+<Layout title="FSM Agents — World Browser">
+  <main>
+    <h1>World Browser</h1>
+    <p class="subtitle">All realms, characters, and scenes</p>
+
+    {[...realms.entries()].map(([realm, data]) => (
+      <section class="realm">
+        <h2>{realm}</h2>
+
+        {data.scenes.length > 0 && (
+          <div class="group">
+            <h3>Scenes</h3>
+            <div class="grid">
+              {data.scenes.map((scene) => (
+                <a href={`/scenes/${scene.id}`} class="card scene-card">
+                  <span class="card-type">Scene</span>
+                  <h4>{scene.data.name}</h4>
+                  <span class="tone-badge">{scene.data.tone}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.characters.length > 0 && (
+          <div class="group">
+            <h3>Characters</h3>
+            <div class="grid">
+              {data.characters.map((char) => (
+                <a href={`/characters/${char.id}`} class="card character-card">
+                  <span class="card-type">Character</span>
+                  <h4>{char.data.name}</h4>
+                  <div class="stats">
+                    <span>Energy: {char.data.energy.max}</span>
+                    <span>Model: {char.data.model.split('-').slice(-1)[0]}</span>
+                  </div>
+                  <div class="keywords">
+                    {char.data.triggers.keywords.slice(0, 5).map((kw: string) => (
+                      <span class="keyword">{kw}</span>
+                    ))}
+                    {char.data.triggers.keywords.length > 5 && (
+                      <span class="keyword more">+{char.data.triggers.keywords.length - 5}</span>
+                    )}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+    ))}
+  </main>
+</Layout>

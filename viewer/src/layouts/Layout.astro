@@ -1,0 +1,107 @@
+---
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width" />
+  <title>{title}</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.5rem; margin: 2rem 0 1rem; color: var(--accent); text-transform: capitalize; }
+    h3 { font-size: 1.1rem; color: var(--text-dim); margin-bottom: 0.75rem; }
+    h4 { font-size: 1.1rem; margin: 0.5rem 0; }
+    .subtitle { color: var(--text-dim); margin-bottom: 2rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      text-decoration: none;
+      color: var(--text);
+      transition: border-color 0.2s;
+      display: block;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card-type {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+    }
+    .character-card .card-type { color: var(--purple); }
+    .scene-card .card-type { color: var(--green); }
+    .stats { display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-dim); }
+    .keywords { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.5rem; }
+    .keyword {
+      background: var(--border);
+      padding: 0.1rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+    .keyword.more { color: var(--accent); }
+    .tone-badge {
+      display: inline-block;
+      background: var(--border);
+      padding: 0.1rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      color: var(--yellow);
+    }
+    .group { margin-bottom: 1.5rem; }
+    .realm { margin-bottom: 2rem; }
+
+    /* Detail pages */
+    .back { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .back:hover { text-decoration: underline; }
+    .meta { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
+    .meta-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 1rem; }
+    .meta-label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+    .meta-value { font-size: 1.1rem; }
+    .bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; margin-top: 0.25rem; }
+    .bar-fill { height: 100%; border-radius: 4px; }
+    .emote-section { margin: 1rem 0; }
+    .emote-list { list-style: none; }
+    .emote-list li { color: var(--green); font-style: italic; padding: 0.25rem 0; font-size: 0.9rem; }
+    .event-list { list-style: none; }
+    .event-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+    .event-weight { color: var(--yellow); font-size: 0.8rem; font-family: monospace; }
+    .content-body { margin-top: 2rem; line-height: 1.8; }
+    .content-body p { margin-bottom: 1rem; }
+    .content-body h1, .content-body h2, .content-body h3 { margin-top: 1.5rem; margin-bottom: 0.5rem; }
+    .tone-section { margin: 1rem 0; }
+    .tone-section h4 { color: var(--yellow); text-transform: capitalize; }
+  </style>
+</head>
+<body>
+  <slot />
+</body>
+</html>

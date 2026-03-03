@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+data/*.jsonl
+viewer/node_modules/
+viewer/dist/
+viewer/.astro/
+bun.lock
+*.lock

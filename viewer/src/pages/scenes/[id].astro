@@ -1,0 +1,102 @@
+---
+import { getCollection, render } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+
+export async function getStaticPaths() {
+  const scenes = await getCollection('scenes');
+  return scenes.map((scene) => ({
+    params: { id: scene.id },
+    props: { scene },
+  }));
+}
+
+const { scene } = Astro.props;
+const { Content } = await render(scene);
+const { data } = scene;
+
+// Pre-process data to avoid type assertions in the template
+const toneMapEntries = data.toneMap ? Object.entries(data.toneMap) : [];
+const eventEntries = data.events ? Object.entries(data.events) : [];
+const tickRateSeconds = data.tickRate ? data.tickRate / 1000 : null;
+---
+
+<Layout title={`${data.name} — FSM Agents`}>
+  <main>
+    <a href="/" class="back">&larr; Back to World</a>
+    <span class="card-type" style="margin-left: 1rem; color: var(--green);">SCENE</span>
+    <h1>{data.name}</h1>
+    <p class="subtitle">Realm: {data.realm} &middot; Default tone: {data.tone}</p>
+
+    {data.dmModel && (
+      <div class="meta">
+        <div class="meta-item">
+          <div class="meta-label">DM Model</div>
+          <div class="meta-value">{data.dmModel}</div>
+        </div>
+        {data.dmEscalationThreshold && (
+          <div class="meta-item">
+            <div class="meta-label">Escalation Threshold</div>
+            <div class="meta-value">{data.dmEscalationThreshold}/10 tension</div>
+          </div>
+        )}
+        {tickRateSeconds && (
+          <div class="meta-item">
+            <div class="meta-label">Tick Rate</div>
+            <div class="meta-value">{tickRateSeconds}s</div>
+          </div>
+        )}
+      </div>
+    )}
+
+    {data.tensionKeywords && data.tensionKeywords.length > 0 && (
+      <>
+        <h3>Tension Keywords</h3>
+        <div class="keywords" style="margin-bottom: 1rem;">
+          {data.tensionKeywords.map((kw: string) => (
+            <span class="keyword" style="color: var(--red);">{kw}</span>
+          ))}
+        </div>
+      </>
+    )}
+
+    {toneMapEntries.length > 0 && (
+      <>
+        <h3>Tone Keywords</h3>
+        {toneMapEntries.map(([tone, keywords]) => (
+          <div class="tone-section">
+            <h4>{tone}</h4>
+            <div class="keywords">
+              {(keywords as string[]).map((kw: string) => (
+                <span class="keyword">{kw}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </>
+    )}
+
+    {eventEntries.length > 0 && (
+      <>
+        <h3>Scene Events by Tone</h3>
+        {eventEntries.map(([tone, events]) => (
+          <div class="tone-section">
+            <h4>{tone}</h4>
+            <ul class="event-list">
+              {(events as any[]).map((evt: any) => (
+                <li>
+                  <span class="event-weight">{(evt.weight * 100).toFixed(1)}%</span>
+                  {' '}{evt.content}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </>
+    )}
+
+    <h3>Description & DM Instructions</h3>
+    <div class="content-body">
+      <Content />
+    </div>
+  </main>
+</Layout>

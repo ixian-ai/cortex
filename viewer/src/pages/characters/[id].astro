@@ -1,0 +1,71 @@
+---
+import { getCollection, render } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+
+export async function getStaticPaths() {
+  const characters = await getCollection('characters');
+  return characters.map((char) => ({
+    params: { id: char.id },
+    props: { char },
+  }));
+}
+
+const { char } = Astro.props;
+const { Content } = await render(char);
+const { data } = char;
+---
+
+<Layout title={`${data.name} — FSM Agents`}>
+  <main>
+    <a href="/" class="back">&larr; Back to World</a>
+    <span class="card-type" style="margin-left: 1rem; color: var(--purple);">CHARACTER</span>
+    <h1>{data.name}</h1>
+    <p class="subtitle">Realm: {data.realm} &middot; Model: {data.model}</p>
+
+    <div class="meta">
+      <div class="meta-item">
+        <div class="meta-label">Energy</div>
+        <div class="meta-value">{data.energy.max}</div>
+        <div class="bar"><div class="bar-fill" style={`width: 100%; background: var(--green);`}></div></div>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">Cost: {data.energy.responseCost} / Recharge: {data.energy.rechargeRate}/tick</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Boredom Threshold</div>
+        <div class="meta-value">{data.boredom.threshold}</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">Rate: +{data.boredom.increaseRate}/tick</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Cooldown</div>
+        <div class="meta-value">{data.cooldownTicks} ticks</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Random Chance</div>
+        <div class="meta-value">{(data.triggers.randomChance * 100).toFixed(0)}%</div>
+      </div>
+    </div>
+
+    <h3>Trigger Keywords</h3>
+    <div class="keywords" style="margin-bottom: 1rem;">
+      {data.triggers.keywords.map((kw: string) => (
+        <span class="keyword">{kw}</span>
+      ))}
+    </div>
+
+    <h3>Emotes</h3>
+    {Object.entries(data.emotes).map(([category, emotes]) => (
+      <div class="emote-section">
+        <h4 style="text-transform: capitalize; color: var(--text-dim);">{category}</h4>
+        <ul class="emote-list">
+          {(emotes as string[]).map((emote) => (
+            <li>{emote}</li>
+          ))}
+        </ul>
+      </div>
+    ))}
+
+    <h3>System Prompt</h3>
+    <div class="content-body">
+      <Content />
+    </div>
+  </main>
+</Layout>
