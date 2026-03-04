@@ -116,53 +116,63 @@ export class Room {
     const files = readdirSync(dirPath).filter(
       (f) => f.endsWith('.md') || f.endsWith('.mdx')
     );
-
     for (const file of files) {
-      const raw = readFileSync(join(dirPath, file), 'utf-8');
-      const { data, content } = matter(raw);
-
-      const cfg: CharacterConfig = {
-        name: data.name,
-        realm: data.realm ?? 'unknown',
-        type: data.type ?? 'character',
-        model: data.model,
-        maxTokens: data.maxTokens ?? 200,
-        triggers: {
-          keywords: data.triggers?.keywords ?? [],
-          alwaysRespondTo: data.triggers?.alwaysRespondTo ?? [],
-          randomChance: data.triggers?.randomChance ?? 0.05,
-        },
-        energy: {
-          max: data.energy?.max ?? 10,
-          responseCost: data.energy?.responseCost ?? 3,
-          emoteCost: data.energy?.emoteCost ?? 1,
-          rechargeRate: data.energy?.rechargeRate ?? 1,
-        },
-        boredom: {
-          threshold: data.boredom?.threshold ?? 5,
-          increaseRate: data.boredom?.increaseRate ?? 0.5,
-        },
-        cooldownTicks: data.cooldownTicks ?? 2,
-        emotes: data.emotes ?? { idle: ['...'] },
-        systemPrompt: content.trim(),
-      };
-
-      const initialState: CharacterState = {
-        fsm: 'IDLE',
-        energy: cfg.energy.max,
-        boredom: 0,
-        mood: 0,
-        cooldownRemaining: 0,
-        lastSpoke: 0,
-        attention: [],
-      };
-
-      this.characters.set(cfg.name, {
-        config: cfg,
-        state: initialState,
-        history: [],
-      });
+      this.parseAndAddCharacter(join(dirPath, file));
     }
+  }
+
+  /** Load a specific list of character files (for scenario mode). */
+  loadCharacterFiles(filePaths: string[]): void {
+    for (const filePath of filePaths) {
+      this.parseAndAddCharacter(filePath);
+    }
+  }
+
+  private parseAndAddCharacter(filePath: string): void {
+    const raw = readFileSync(filePath, 'utf-8');
+    const { data, content } = matter(raw);
+
+    const cfg: CharacterConfig = {
+      name: data.name,
+      realm: data.realm ?? 'unknown',
+      type: data.type ?? 'character',
+      model: data.model,
+      maxTokens: data.maxTokens ?? 200,
+      triggers: {
+        keywords: data.triggers?.keywords ?? [],
+        alwaysRespondTo: data.triggers?.alwaysRespondTo ?? [],
+        randomChance: data.triggers?.randomChance ?? 0.05,
+      },
+      energy: {
+        max: data.energy?.max ?? 10,
+        responseCost: data.energy?.responseCost ?? 3,
+        emoteCost: data.energy?.emoteCost ?? 1,
+        rechargeRate: data.energy?.rechargeRate ?? 1,
+      },
+      boredom: {
+        threshold: data.boredom?.threshold ?? 5,
+        increaseRate: data.boredom?.increaseRate ?? 0.5,
+      },
+      cooldownTicks: data.cooldownTicks ?? 2,
+      emotes: data.emotes ?? { idle: ['...'] },
+      systemPrompt: content.trim(),
+    };
+
+    const initialState: CharacterState = {
+      fsm: 'IDLE',
+      energy: cfg.energy.max,
+      boredom: 0,
+      mood: 0,
+      cooldownRemaining: 0,
+      lastSpoke: 0,
+      attention: [],
+    };
+
+    this.characters.set(cfg.name, {
+      config: cfg,
+      state: initialState,
+      history: [],
+    });
   }
 
   // ── Message management ─────────────────────────────────────────────────
@@ -218,6 +228,19 @@ export class Room {
   stop(): void {
     this.clock.stop();
     this.eventBus.removeAllListeners();
+  }
+
+  /**
+   * Scenario mode: manually fire one tick and await all responses.
+   * Bypasses the setInterval clock — caller controls timing.
+   * Do NOT call start() when using this.
+   */
+  async tick(tickNumber: number = 0): Promise<void> {
+    return this.handleTick({
+      type: 'tick',
+      tickNumber,
+      timestamp: Date.now(),
+    });
   }
 
   // ── Player input ───────────────────────────────────────────────────────

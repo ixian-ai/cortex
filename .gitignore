@@ -7,3 +7,4 @@ viewer/dist/
 viewer/.astro/
 bun.lock
 *.lock
+scenarios/*.md
