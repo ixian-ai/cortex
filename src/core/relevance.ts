@@ -1,44 +1,43 @@
-import type { CharacterConfig, RelevanceLevel } from '../types.js';
+import type { AgentConfig, RelevanceLevel } from "../types.js";
 
 /**
  * Zero-cost relevance evaluation — pure string matching, no API calls.
- * Determines how relevant an incoming message is to a character based on
- * trigger words, direct mentions, and random chance.
+ * Determines how relevant an incoming message is to an agent based on
+ * watchwords, direct mentions, and random chance.
  */
 export function evaluateRelevance(
   message: string,
   from: string,
-  config: CharacterConfig
+  config: AgentConfig,
 ): RelevanceLevel {
   const lower = message.toLowerCase();
 
-  // 1. Always-respond triggers (exact substring, case-insensitive)
-  for (const trigger of config.triggers.alwaysRespondTo) {
+  // 1. Priority signal triggers (exact substring, case-insensitive)
+  for (const trigger of config.triggers.prioritySignals) {
     if (lower.includes(trigger.toLowerCase())) {
-      return 'HIGH';
+      return "HIGH";
     }
   }
 
-  // 2. Direct @mention of the character name
-  const mentionPattern = '@' + config.name.toLowerCase();
+  // 2. Direct @mention of the agent name
+  const mentionPattern = `@${config.name.toLowerCase()}`;
   if (lower.includes(mentionPattern)) {
-    return 'HIGH';
+    return "HIGH";
   }
 
-  // 3. Keyword triggers (word-boundary aware, case-insensitive)
-  for (const keyword of config.triggers.keywords) {
-    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`\\b${escaped}\\b`, 'i');
+  // 3. Watchword triggers (word-boundary aware, case-insensitive)
+  for (const keyword of config.triggers.watchwords) {
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`\\b${escaped}\\b`, "i");
     if (pattern.test(message)) {
-      return 'MEDIUM';
+      return "MEDIUM";
     }
   }
 
   // 4. Random chance roll
   if (Math.random() < config.triggers.randomChance) {
-    return 'LOW';
+    return "LOW";
   }
 
-  // 5. Not relevant
-  return 'NONE';
+  return "NONE";
 }

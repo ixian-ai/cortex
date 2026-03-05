@@ -1,35 +1,29 @@
-import type { FSMState, FSMTransition, EngineEvent, CharacterConfig, CharacterState } from '../types.js';
-import { evaluateRelevance } from './relevance.js';
+import type { AgentConfig, AgentState, EngineEvent, FSMTransition } from "../types.js";
+import { evaluateRelevance } from "./relevance.js";
 
 /**
  * Pure deterministic FSM evaluation.
- * Given an event, the current character state, and config, returns the
+ * Given an event, the current agent state, and config, returns the
  * next state transition with an optional action.
  */
 export function evaluateFSM(
   event: EngineEvent,
-  state: CharacterState,
-  config: CharacterConfig
+  state: AgentState,
+  config: AgentConfig,
 ): FSMTransition {
   const hasEnergy = state.energy >= config.energy.responseCost;
 
   switch (state.fsm) {
-    // ── IDLE ──────────────────────────────────────────────────────────
-    case 'IDLE':
+    case "IDLE":
       return evaluateIdle(event, state, config, hasEnergy);
 
-    // ── RESPONDING ───────────────────────────────────────────────────
-    // The room handles transitioning to COOLDOWN after the API response.
-    case 'RESPONDING':
-      return { nextState: 'RESPONDING' };
+    case "RESPONDING":
+      return { nextState: "RESPONDING" };
 
-    // ── EMOTING ──────────────────────────────────────────────────────
-    // The room handles transitioning back to IDLE after the emote is sent.
-    case 'EMOTING':
-      return { nextState: 'EMOTING' };
+    case "STATUS_SIGNAL":
+      return { nextState: "STATUS_SIGNAL" };
 
-    // ── COOLDOWN ─────────────────────────────────────────────────────
-    case 'COOLDOWN':
+    case "COOLDOWN":
       return evaluateCooldown(event, state);
 
     default:
@@ -37,104 +31,89 @@ export function evaluateFSM(
   }
 }
 
-// ── IDLE sub-evaluation ────────────────────────────────────────────────
-
 function evaluateIdle(
   event: EngineEvent,
-  state: CharacterState,
-  config: CharacterConfig,
-  hasEnergy: boolean
+  state: AgentState,
+  config: AgentConfig,
+  hasEnergy: boolean,
 ): FSMTransition {
   switch (event.type) {
-    case 'message': {
+    case "message": {
       const relevance = evaluateRelevance(event.content, event.from, config);
 
       switch (relevance) {
-        case 'HIGH':
-        case 'MEDIUM':
+        case "HIGH":
+        case "MEDIUM":
           if (hasEnergy) {
-            return { nextState: 'RESPONDING', action: 'respond' };
+            return { nextState: "RESPONDING", action: "respond" };
           }
-          // No energy — fall back to a contextual emote
-          return { nextState: 'EMOTING', action: 'emote', emoteCategory: 'contextual' };
+          return { nextState: "STATUS_SIGNAL", action: "signal", signalCategory: "contextual" };
 
-        case 'LOW':
-          return { nextState: 'EMOTING', action: 'emote', emoteCategory: 'idle' };
+        case "LOW":
+          return { nextState: "STATUS_SIGNAL", action: "signal", signalCategory: "idle" };
 
-        case 'NONE':
+        case "NONE":
         default:
-          return { nextState: 'IDLE' };
+          return { nextState: "IDLE" };
       }
     }
 
-    case 'tick': {
-      // Boredom-driven initiation
-      if (state.boredom >= config.boredom.threshold && hasEnergy) {
-        return { nextState: 'RESPONDING', action: 'initiate' };
+    case "tick": {
+      // Initiative-driven self-activation
+      if (state.initiative >= config.initiative.threshold && hasEnergy) {
+        return { nextState: "RESPONDING", action: "initiate" };
       }
 
-      // Random idle emote (5% chance per tick)
+      // Random idle status signal (5% chance per tick)
       if (Math.random() < 0.05) {
-        return { nextState: 'EMOTING', action: 'emote', emoteCategory: 'idle' };
+        return { nextState: "STATUS_SIGNAL", action: "signal", signalCategory: "idle" };
       }
 
-      return { nextState: 'IDLE' };
+      return { nextState: "IDLE" };
     }
 
     // Scene events are NMIs — bypass energy checks
-    case 'scene':
-      return { nextState: 'RESPONDING', action: 'respond' };
+    case "scene":
+      return { nextState: "RESPONDING", action: "respond" };
 
-    // DM directives targeting this character are NMIs
-    case 'dm_directive':
+    // Orchestrator directives targeting this agent are NMIs
+    case "orchestrator_directive":
       if (event.target.toLowerCase() === config.name.toLowerCase()) {
-        return { nextState: 'RESPONDING', action: 'respond' };
+        return { nextState: "RESPONDING", action: "respond" };
       }
-      return { nextState: 'IDLE' };
+      return { nextState: "IDLE" };
 
     default:
-      return { nextState: 'IDLE' };
+      return { nextState: "IDLE" };
   }
 }
 
-// ── COOLDOWN sub-evaluation ────────────────────────────────────────────
-
-function evaluateCooldown(
-  event: EngineEvent,
-  state: CharacterState
-): FSMTransition {
-  if (event.type === 'tick') {
+function evaluateCooldown(event: EngineEvent, state: AgentState): FSMTransition {
+  if (event.type === "tick") {
     const remaining = state.cooldownRemaining - 1;
     if (remaining <= 0) {
-      return { nextState: 'IDLE' };
+      return { nextState: "IDLE" };
     }
-    return { nextState: 'COOLDOWN' };
+    return { nextState: "COOLDOWN" };
   }
 
-  // Non-tick events don't affect cooldown
-  return { nextState: 'COOLDOWN' };
+  return { nextState: "COOLDOWN" };
 }
 
-// ── Tick state updater ─────────────────────────────────────────────────
-
 /**
- * Called every tick to update internal character state.
+ * Called every tick to update internal agent state.
  * Returns a new state object (immutable update).
  */
-export function tickState(
-  state: CharacterState,
-  config: CharacterConfig
-): CharacterState {
+export function tickState(state: AgentState, config: AgentConfig): AgentState {
   return {
     ...state,
     energy: Math.min(config.energy.max, state.energy + config.energy.rechargeRate),
-    boredom: state.boredom + config.boredom.increaseRate,
+    initiative: state.initiative + config.initiative.increaseRate,
     cooldownRemaining: Math.max(0, state.cooldownRemaining - 1),
     mood: decayTowardZero(state.mood, 0.01),
   };
 }
 
-/** Decay a value toward zero by a fixed step. */
 function decayTowardZero(value: number, step: number): number {
   if (value > 0) return Math.max(0, value - step);
   if (value < 0) return Math.min(0, value + step);

@@ -1,9 +1,9 @@
-import { EventEmitter } from 'events';
-import type { EngineEvent, CharacterState, RoomMessage } from '../types.js';
+import { EventEmitter } from "events";
+import type { AgentState, EngineEvent, RoomMessage } from "../types.js";
 
 type EventMap = {
   event: [EngineEvent];
-  stateChange: [string, CharacterState];
+  stateChange: [string, AgentState];
   roomMessage: [RoomMessage];
 };
 
@@ -25,11 +25,11 @@ export class EventBus {
   }
 
   onRoomMessage(handler: (msg: RoomMessage) => void): void {
-    this.on('roomMessage', handler);
+    this.on("roomMessage", handler);
   }
 
-  onStateChange(handler: (name: string, state: CharacterState) => void): void {
-    this.on('stateChange', handler);
+  onStateChange(handler: (name: string, state: AgentState) => void): void {
+    this.on("stateChange", handler);
   }
 
   removeAllListeners(type?: EventKey): void {
