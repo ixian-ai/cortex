@@ -1,4 +1,4 @@
-import { EventBus } from './event-bus.js';
+import type { EventBus } from "./event-bus.js";
 
 /**
  * Tick clock that drives the engine.
@@ -16,12 +16,12 @@ export class Clock {
   }
 
   start(): void {
-    if (this.intervalId !== null) return; // already running
+    if (this.intervalId !== null) return;
 
     this.intervalId = setInterval(() => {
       this.tickCount++;
-      this.eventBus.emit('event', {
-        type: 'tick',
+      this.eventBus.emit("event", {
+        type: "tick",
         tickNumber: this.tickCount,
         timestamp: Date.now(),
       });
@@ -37,7 +37,6 @@ export class Clock {
 
   setRate(ms: number): void {
     this.tickRate = ms;
-    // If currently running, restart with the new rate
     if (this.intervalId !== null) {
       this.stop();
       this.start();

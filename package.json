@@ -1,24 +1,26 @@
 {
-  "name": "fsm-agents",
+  "name": "@ixian/cortex",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "bun run src/index.tsx",
-    "dev": "bun --watch run src/index.tsx",
-    "scenario": "bun run src/scenario.ts"
+    "test": "bun test src/"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@ixian/shared-types": "workspace:*",
+    "@ixian/pg-client": "workspace:*",
+    "@ixian/signal-resolver": "workspace:*",
+    "@ixian/telemetry": "workspace:*",
+    "uuid": "^11.1.0"
+  },
+  "optionalDependencies": {
     "gray-matter": "^4.0.3",
     "ink": "^5.1.0",
     "ink-text-input": "^6.0.0",
-    "react": "^18.3.1",
-    "uuid": "^11.1.0"
+    "react": "^18.3.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",
-    "@types/uuid": "^10.0.0",
-    "typescript": "^5.7.0",
-    "tsx": "^4.19.0"
+    "@types/uuid": "^10.0.0"
   }
 }

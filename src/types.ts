@@ -1,74 +1,73 @@
 // FSM States — only RESPONDING triggers an API call
-export type FSMState = 'IDLE' | 'LISTENING' | 'RESPONDING' | 'EMOTING' | 'COOLDOWN';
+export type FSMState = "IDLE" | "LISTENING" | "RESPONDING" | "STATUS_SIGNAL" | "COOLDOWN";
 
 // Relevance levels from the zero-cost evaluation
-export type RelevanceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+export type RelevanceLevel = "HIGH" | "MEDIUM" | "LOW" | "NONE";
 
 // Engine events — the pulse of the system
 export type EngineEvent =
-  | { type: 'message'; from: string; content: string; timestamp: number }
-  | { type: 'tick'; tickNumber: number; timestamp: number }
-  | { type: 'scene'; content: string; timestamp: number }
-  | { type: 'emote'; from: string; content: string; timestamp: number }
-  | { type: 'system'; content: string; timestamp: number }
-  | { type: 'dm_directive'; target: string; directive: string; timestamp: number };
+  | { type: "message"; from: string; content: string; timestamp: number }
+  | { type: "tick"; tickNumber: number; timestamp: number }
+  | { type: "scene"; content: string; timestamp: number }
+  | { type: "status_signal"; from: string; content: string; timestamp: number }
+  | { type: "system"; content: string; timestamp: number }
+  | { type: "orchestrator_directive"; target: string; directive: string; timestamp: number };
 
 // What the FSM decides to do
 export interface FSMTransition {
   nextState: FSMState;
-  action?: 'respond' | 'emote' | 'initiate' | 'none';
-  emoteCategory?: string; // which emote set to pick from
+  action?: "respond" | "signal" | "initiate" | "none";
+  signalCategory?: string;
 }
 
-// Character definition — parsed from markdown frontmatter
-export interface CharacterConfig {
+// Agent configuration — resolved from pg agent_profiles or composed by University
+export interface AgentConfig {
   name: string;
-  realm: string;
-  type: string;
+  profileId?: string;
   model: string;
   maxTokens: number;
+  systemPrompt: string;
   triggers: {
-    keywords: string[];
-    alwaysRespondTo: string[];
+    watchwords: string[];
+    prioritySignals: string[];
     randomChance: number;
   };
   energy: {
     max: number;
     responseCost: number;
-    emoteCost: number;
+    statusCost: number;
     rechargeRate: number;
   };
-  boredom: {
+  initiative: {
     threshold: number;
     increaseRate: number;
   };
   cooldownTicks: number;
-  emotes: Record<string, string[]>;
-  systemPrompt: string;
+  statusSignals: Record<string, string[]>;
 }
 
-// Mutable internal state per character — evolves deterministically
-export interface CharacterState {
+// Mutable internal state per agent — evolves deterministically
+export interface AgentState {
   fsm: FSMState;
   energy: number;
-  boredom: number;
+  initiative: number;
   mood: number; // -1 to 1
   cooldownRemaining: number;
   lastSpoke: number;
   attention: string[];
 }
 
-// A character instance = config + state + conversation history
-export interface Character {
-  config: CharacterConfig;
-  state: CharacterState;
+// An agent instance = config + state + conversation history
+export interface Agent {
+  config: AgentConfig;
+  state: AgentState;
   history: HistoryEntry[];
 }
 
-// Display message for the TUI
+// Display message for the room
 export interface RoomMessage {
   id: string;
-  type: 'message' | 'emote' | 'scene' | 'system';
+  type: "message" | "status_signal" | "scene" | "system";
   from: string;
   content: string;
   timestamp: number;
@@ -76,52 +75,87 @@ export interface RoomMessage {
 
 // Conversation history entry (for Anthropic API)
 export interface HistoryEntry {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 }
 
 // Event bus event map
 export interface EventMap {
   event: [EngineEvent];
-  stateChange: [string, CharacterState]; // characterName, newState
+  stateChange: [string, AgentState];
   roomMessage: [RoomMessage];
 }
 
 // Room configuration
 export interface RoomConfig {
   name: string;
-  tickRate: number; // ms between ticks
-  maxMessages: number; // max messages in the log
+  tickRate: number;
+  maxMessages: number;
   sceneEvents: SceneEvent[];
 }
 
-// Weighted scene event for the DM pacemaker
+// Weighted scene event for the orchestrator pacemaker
 export interface SceneEvent {
-  weight: number; // 0-1 probability per tick
+  weight: number;
   content: string;
 }
 
-// Scene configuration (parsed from .mdx frontmatter)
+// Scene configuration
 export interface SceneConfig {
   name: string;
-  realm: string;
-  tone: 'calm' | 'tense' | 'jovial' | 'somber';
+  mode: "deliberate" | "urgent" | "creative" | "review";
   tickRate: number;
   maxMessages: number;
-  dmModel: string;
-  dmMaxTokens: number;
-  dmEscalationThreshold: number;
-  tensionKeywords: string[];
-  toneMap: Record<string, string[]>;
+  orchestratorModel: string;
+  orchestratorMaxTokens: number;
+  orchestratorEscalationThreshold: number;
+  urgencyKeywords: string[];
+  modeMap: Record<string, string[]>;
   events: Record<string, SceneEvent[]>;
-  dmSystemPrompt: string;  // markdown body
-  description: string;     // first section of markdown body
+  orchestratorSystemPrompt: string;
+  description: string;
 }
 
 // Mutable scene state — evolves deterministically
 export interface SceneState {
-  tension: number;        // 0-10
-  currentTone: string;    // derived from conversation
-  pacing: number;         // ticks since last scene event
-  ticksSinceLastDM: number;
+  urgency: number; // 0-10
+  currentMode: string;
+  pacing: number;
+  ticksSinceLastOrchestrator: number;
+}
+
+// Completion conditions for a room
+export interface CompletionConditions {
+  maxTicks?: number;
+  maxMessages?: number;
+  maxDurationMs?: number;
+}
+
+// Room lifecycle status
+export type RoomStatus = "pending" | "running" | "completed" | "failed" | "stopped";
+
+// Scene composition input
+export interface ComposeInput {
+  specId?: string;
+  title: string;
+  body: string;
+  agents: string[];
+  domains: string[];
+  mode?: "deliberate" | "urgent" | "creative" | "review";
+  maxTicks?: number;
+  maxMessages?: number;
+  maxDurationMs?: number;
+  orchestratorModel?: string;
+}
+
+// Composed scene — what the scene composer produces
+export interface ComposedScene {
+  sceneConfig: SceneConfig;
+  agents: AgentConfig[];
+  completionConditions: CompletionConditions;
+  compositionMeta: {
+    composer: string;
+    durationMs: number;
+    agentsResolved: number;
+  };
 }

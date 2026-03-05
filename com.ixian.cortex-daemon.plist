@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ixian.cortex-daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/bdmorin/src/ixian/bin/cortex-daemon</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CORTEX_PORT</key>
+        <string>3200</string>
+        <key>PATH</key>
+        <string>/Users/bdmorin/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>/Users/bdmorin/src/ixian</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/bdmorin/.cache/ixian/cortex-daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/bdmorin/.cache/ixian/cortex-daemon.log</string>
+</dict>
+</plist>

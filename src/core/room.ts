@@ -1,53 +1,65 @@
+import { generateId } from "@ixian/shared-types";
+import { v4 as uuid } from "uuid";
 import type {
-  Character,
-  CharacterConfig,
-  CharacterState,
-  RoomMessage,
+  Agent,
+  AgentConfig,
+  AgentState,
+  CompletionConditions,
+  EngineEvent,
   RoomConfig,
+  RoomMessage,
+  RoomStatus,
   SceneConfig,
   SceneState,
-  EngineEvent,
-} from '../types.js';
-import { EventBus } from './event-bus.js';
-import { Clock } from './clock.js';
-import { evaluateFSM, tickState } from './fsm.js';
+} from "../types.js";
+import { Clock } from "./clock.js";
+import { EventBus } from "./event-bus.js";
+import { evaluateFSM, tickState } from "./fsm.js";
 import {
-  rollSceneEvent,
-  tickSceneState,
-  shouldEscalateToDM,
   createSceneState,
-} from './scene-engine.js';
-import { v4 as uuid } from 'uuid';
-import matter from 'gray-matter';
-import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+  rollSceneEvent,
+  shouldEscalateToOrchestrator,
+  tickSceneState,
+} from "./scene-engine.js";
 
-type ResponseHandler = (character: Character, context: RoomMessage[]) => Promise<string>;
-type DMResponseHandler = (
+type ResponseHandler = (agent: Agent, context: RoomMessage[]) => Promise<string>;
+type OrchestratorResponseHandler = (
   sceneConfig: SceneConfig,
   sceneState: SceneState,
-  recentMessages: RoomMessage[]
+  recentMessages: RoomMessage[],
 ) => Promise<string>;
+type CompletionHandler = (room: Room) => void;
 
 /**
  * The Room — central state manager and heart of the engine.
- * Owns the EventBus, Clock, characters, and message log.
+ * Owns the EventBus, Clock, agents, and message log.
  * Orchestrates tick processing, FSM evaluation, and async API responses.
  */
 export class Room {
+  readonly roomId: string;
   readonly config: RoomConfig;
   readonly eventBus: EventBus;
+  readonly completionConditions: CompletionConditions;
   private clock: Clock;
-  private characters: Map<string, Character> = new Map();
+  private agents: Map<string, Agent> = new Map();
   private messages: RoomMessage[] = [];
   private responseHandler: ResponseHandler | null = null;
-  private dmResponseHandler: DMResponseHandler | null = null;
+  private orchestratorResponseHandler: OrchestratorResponseHandler | null = null;
+  private completionHandler: CompletionHandler | null = null;
+  private startedAt: number | null = null;
+  private _status: RoomStatus = "pending";
 
   sceneConfig: SceneConfig | null = null;
   sceneState: SceneState | null = null;
 
-  constructor(config: RoomConfig, sceneConfig?: SceneConfig | null) {
-    // If a scene config is provided, derive tickRate and maxMessages from it
+  constructor(
+    config: RoomConfig,
+    sceneConfig?: SceneConfig | null,
+    completionConditions?: CompletionConditions,
+  ) {
+    this.roomId = generateId();
+    this.completionConditions = completionConditions ?? {};
+
     if (sceneConfig) {
       this.config = {
         ...config,
@@ -65,135 +77,47 @@ export class Room {
     this.clock = new Clock(this.eventBus, this.config.tickRate);
   }
 
-  // ── Scene loading ─────────────────────────────────────────────────────
-
-  loadScene(filePath: string): SceneConfig {
-    const raw = readFileSync(filePath, 'utf-8');
-    const { data, content } = matter(raw);
-
-    // Extract description from the first section of the markdown body
-    const lines = content.trim().split('\n');
-    const descriptionLines: string[] = [];
-    for (const line of lines) {
-      // Stop at the first heading after the initial content
-      if (descriptionLines.length > 0 && line.startsWith('#')) break;
-      descriptionLines.push(line);
-    }
-
-    const sceneConfig: SceneConfig = {
-      name: data.name,
-      realm: data.realm ?? 'unknown',
-      tone: data.tone ?? 'calm',
-      tickRate: data.tickRate ?? 5000,
-      maxMessages: data.maxMessages ?? 200,
-      dmModel: data.dmModel ?? 'claude-sonnet-4-6',
-      dmMaxTokens: data.dmMaxTokens ?? 300,
-      dmEscalationThreshold: data.dmEscalationThreshold ?? 7,
-      tensionKeywords: data.tensionKeywords ?? [],
-      toneMap: data.toneMap ?? {},
-      events: data.events ?? {},
-      dmSystemPrompt: content.trim(),
-      description: descriptionLines.join('\n').trim(),
-    };
-
-    this.sceneConfig = sceneConfig;
-    this.sceneState = createSceneState(sceneConfig);
-
-    // Update room config with scene-derived values
-    (this.config as any).tickRate = sceneConfig.tickRate;
-    (this.config as any).maxMessages = sceneConfig.maxMessages;
-    (this.config as any).name = sceneConfig.name;
-
-    // Update the clock with the new tick rate
-    this.clock.setRate(sceneConfig.tickRate);
-
-    return sceneConfig;
+  get status(): RoomStatus {
+    return this._status;
   }
 
-  // ── Character loading ──────────────────────────────────────────────────
+  // ── Agent management ──────────────────────────────────────────────────
 
-  loadCharacters(dirPath: string): void {
-    const files = readdirSync(dirPath).filter(
-      (f) => f.endsWith('.md') || f.endsWith('.mdx')
-    );
-    for (const file of files) {
-      this.parseAndAddCharacter(join(dirPath, file));
-    }
-  }
-
-  /** Load a specific list of character files (for scenario mode). */
-  loadCharacterFiles(filePaths: string[]): void {
-    for (const filePath of filePaths) {
-      this.parseAndAddCharacter(filePath);
-    }
-  }
-
-  private parseAndAddCharacter(filePath: string): void {
-    const raw = readFileSync(filePath, 'utf-8');
-    const { data, content } = matter(raw);
-
-    const cfg: CharacterConfig = {
-      name: data.name,
-      realm: data.realm ?? 'unknown',
-      type: data.type ?? 'character',
-      model: data.model,
-      maxTokens: data.maxTokens ?? 200,
-      triggers: {
-        keywords: data.triggers?.keywords ?? [],
-        alwaysRespondTo: data.triggers?.alwaysRespondTo ?? [],
-        randomChance: data.triggers?.randomChance ?? 0.05,
-      },
-      energy: {
-        max: data.energy?.max ?? 10,
-        responseCost: data.energy?.responseCost ?? 3,
-        emoteCost: data.energy?.emoteCost ?? 1,
-        rechargeRate: data.energy?.rechargeRate ?? 1,
-      },
-      boredom: {
-        threshold: data.boredom?.threshold ?? 5,
-        increaseRate: data.boredom?.increaseRate ?? 0.5,
-      },
-      cooldownTicks: data.cooldownTicks ?? 2,
-      emotes: data.emotes ?? { idle: ['...'] },
-      systemPrompt: content.trim(),
-    };
-
-    const initialState: CharacterState = {
-      fsm: 'IDLE',
-      energy: cfg.energy.max,
-      boredom: 0,
+  addAgent(config: AgentConfig): void {
+    const initialState: AgentState = {
+      fsm: "IDLE",
+      energy: config.energy.max,
+      initiative: 0,
       mood: 0,
       cooldownRemaining: 0,
       lastSpoke: 0,
       attention: [],
     };
 
-    this.characters.set(cfg.name, {
-      config: cfg,
+    this.agents.set(config.name, {
+      config,
       state: initialState,
       history: [],
     });
   }
 
-  // ── Message management ─────────────────────────────────────────────────
+  // ── Message management ────────────────────────────────────────────────
 
   addMessage(msg: RoomMessage): void {
     this.messages.push(msg);
-    this.eventBus.emit('roomMessage', msg);
+    this.eventBus.emit("roomMessage", msg);
 
-    // Trim to maxMessages
     if (this.messages.length > this.config.maxMessages) {
       this.messages = this.messages.slice(-this.config.maxMessages);
     }
 
-    // Reset pacing counter when a message arrives (conversation is active)
-    if (this.sceneState && msg.type === 'message') {
+    if (this.sceneState && msg.type === "message") {
       this.sceneState = { ...this.sceneState, pacing: 0 };
     }
   }
 
-  getCharacters(): Map<string, Character> {
-    return this.characters;
+  getAgents(): Map<string, Agent> {
+    return this.agents;
   }
 
   getMessages(): RoomMessage[] {
@@ -208,48 +132,50 @@ export class Room {
     return this.sceneConfig;
   }
 
-  // ── Event proxy (for TUI subscription) ─────────────────────────────────
+  // ── Event proxy ───────────────────────────────────────────────────────
 
-  on(type: 'event' | 'stateChange' | 'roomMessage', handler: (...args: any[]) => void): void {
-    this.eventBus.on(type as any, handler);
+  on(type: "event" | "stateChange" | "roomMessage", handler: (...args: unknown[]) => void): void {
+    this.eventBus.on(type as "event", handler as (...args: [EngineEvent]) => void);
   }
 
-  off(type: 'event' | 'stateChange' | 'roomMessage', handler: (...args: any[]) => void): void {
-    this.eventBus.off(type as any, handler);
+  off(type: "event" | "stateChange" | "roomMessage", handler: (...args: unknown[]) => void): void {
+    this.eventBus.off(type as "event", handler as (...args: [EngineEvent]) => void);
   }
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────
+  // ── Lifecycle ─────────────────────────────────────────────────────────
 
   start(): void {
-    this.eventBus.on('event', (event) => this.handleEvent(event));
+    this._status = "running";
+    this.startedAt = Date.now();
+    this.eventBus.on("event", (event) => this.handleEvent(event));
     this.clock.start();
   }
 
   stop(): void {
+    this._status = "stopped";
     this.clock.stop();
     this.eventBus.removeAllListeners();
   }
 
   /**
-   * Scenario mode: manually fire one tick and await all responses.
+   * Manual tick for testing / scenario mode.
    * Bypasses the setInterval clock — caller controls timing.
-   * Do NOT call start() when using this.
    */
   async tick(tickNumber: number = 0): Promise<void> {
     return this.handleTick({
-      type: 'tick',
+      type: "tick",
       tickNumber,
       timestamp: Date.now(),
     });
   }
 
-  // ── Player input ───────────────────────────────────────────────────────
+  // ── External message injection ────────────────────────────────────────
 
-  handlePlayerMessage(content: string): void {
+  injectMessage(content: string, from = "external"): void {
     const msg: RoomMessage = {
       id: uuid(),
-      type: 'message',
-      from: 'You',
+      type: "message",
+      from,
       content,
       timestamp: Date.now(),
     };
@@ -257,238 +183,272 @@ export class Room {
     this.addMessage(msg);
 
     const event: EngineEvent = {
-      type: 'message',
-      from: 'You',
+      type: "message",
+      from,
       content,
       timestamp: Date.now(),
     };
 
-    this.handleMessageEvent(event, 'You');
+    this.handleMessageEvent(event, from);
   }
 
-  // ── Response callback registration ─────────────────────────────────────
+  // ── Callback registration ─────────────────────────────────────────────
 
   onNeedResponse(handler: ResponseHandler): void {
     this.responseHandler = handler;
   }
 
-  onNeedDMResponse(handler: DMResponseHandler): void {
-    this.dmResponseHandler = handler;
+  onNeedOrchestratorResponse(handler: OrchestratorResponseHandler): void {
+    this.orchestratorResponseHandler = handler;
   }
 
-  // ── Event handling ─────────────────────────────────────────────────────
+  onComplete(handler: CompletionHandler): void {
+    this.completionHandler = handler;
+  }
+
+  // ── Event handling ────────────────────────────────────────────────────
 
   private handleEvent(event: EngineEvent): void {
-    if (event.type === 'tick') {
+    if (event.type === "tick") {
       this.handleTick(event);
     }
   }
 
   private async handleTick(tickEvent: EngineEvent): Promise<void> {
-    // 1. Update internal state for each character
-    for (const [name, char] of this.characters) {
-      char.state = tickState(char.state, char.config);
+    // 1. Update internal state for each agent
+    for (const [, agent] of this.agents) {
+      agent.state = tickState(agent.state, agent.config);
     }
 
     // 2. Tick the scene state if we have a scene config
     if (this.sceneConfig && this.sceneState) {
       this.sceneState = tickSceneState(this.sceneState, this.messages, this.sceneConfig);
 
-      // 3. Roll for scene events using the reactive, tone-aware engine
+      // 3. Roll for scene events
       const sceneContent = rollSceneEvent(this.sceneConfig, this.sceneState);
 
       if (sceneContent) {
-        // Reset pacing after a scene event fires
         this.sceneState = { ...this.sceneState, pacing: 0 };
 
         const sceneMsg: RoomMessage = {
           id: uuid(),
-          type: 'scene',
-          from: 'Scene',
+          type: "scene",
+          from: "Scene",
           content: sceneContent,
           timestamp: Date.now(),
         };
         this.addMessage(sceneMsg);
 
         const sceneEvent: EngineEvent = {
-          type: 'scene',
+          type: "scene",
           content: sceneContent,
           timestamp: Date.now(),
         };
 
-        // Evaluate scene event against all characters
-        for (const [name, char] of this.characters) {
-          await this.evaluateAndAct(char, sceneEvent);
+        for (const [, agent] of this.agents) {
+          await this.evaluateAndAct(agent, sceneEvent);
         }
       }
 
-      // 4. Check if the DM should escalate for a narrative beat
-      if (shouldEscalateToDM(this.sceneState, this.sceneConfig) && this.dmResponseHandler) {
-        this.sceneState = { ...this.sceneState, ticksSinceLastDM: 0 };
+      // 4. Check if the orchestrator should escalate
+      if (
+        shouldEscalateToOrchestrator(this.sceneState, this.sceneConfig) &&
+        this.orchestratorResponseHandler
+      ) {
+        this.sceneState = { ...this.sceneState, ticksSinceLastOrchestrator: 0 };
 
         try {
-          const dmContent = await this.dmResponseHandler(
+          const orchestratorContent = await this.orchestratorResponseHandler(
             this.sceneConfig,
             this.sceneState,
-            this.messages.slice(-10)
+            this.messages.slice(-10),
           );
 
-          if (dmContent) {
-            const dmMsg: RoomMessage = {
+          if (orchestratorContent) {
+            const orchestratorMsg: RoomMessage = {
               id: uuid(),
-              type: 'scene',
-              from: 'DM',
-              content: dmContent,
+              type: "scene",
+              from: "Orchestrator",
+              content: orchestratorContent,
               timestamp: Date.now(),
             };
-            this.addMessage(dmMsg);
+            this.addMessage(orchestratorMsg);
           }
         } catch {
-          // DM escalation failed — silent fallback, no crash
+          // Orchestrator escalation failed — silent fallback
         }
       }
     } else {
-      // Fallback: no scene config, use the old sceneEvents array from RoomConfig
+      // Fallback: use sceneEvents from RoomConfig
       const sceneEvents = this.config.sceneEvents;
       if (sceneEvents.length > 0) {
         for (const event of sceneEvents) {
           if (Math.random() < event.weight) {
             const sceneMsg: RoomMessage = {
               id: uuid(),
-              type: 'scene',
-              from: 'Scene',
+              type: "scene",
+              from: "Scene",
               content: event.content,
               timestamp: Date.now(),
             };
             this.addMessage(sceneMsg);
 
             const sceneEvent: EngineEvent = {
-              type: 'scene',
+              type: "scene",
               content: event.content,
               timestamp: Date.now(),
             };
 
-            for (const [name, char] of this.characters) {
-              await this.evaluateAndAct(char, sceneEvent);
+            for (const [, agent] of this.agents) {
+              await this.evaluateAndAct(agent, sceneEvent);
             }
-            break; // only one scene event per tick
+            break;
           }
         }
       }
     }
 
-    // 5. Evaluate tick event against each character
-    for (const [name, char] of this.characters) {
-      await this.evaluateAndAct(char, tickEvent);
+    // 5. Evaluate tick event against each agent
+    for (const [, agent] of this.agents) {
+      await this.evaluateAndAct(agent, tickEvent);
     }
+
+    // 6. Check completion conditions
+    this.checkCompletion(tickEvent);
   }
 
   private handleMessageEvent(event: EngineEvent, senderName: string): void {
-    for (const [name, char] of this.characters) {
-      // Don't evaluate the sender against their own message
+    for (const [name, agent] of this.agents) {
       if (name === senderName) continue;
-      this.evaluateAndAct(char, event);
+      this.evaluateAndAct(agent, event);
     }
   }
 
-  // ── FSM evaluation and action dispatch ─────────────────────────────────
+  // ── FSM evaluation and action dispatch ────────────────────────────────
 
-  private async evaluateAndAct(
-    char: Character,
-    event: EngineEvent
-  ): Promise<void> {
-    const transition = evaluateFSM(event, char.state, char.config);
-    const prevState = char.state.fsm;
-    char.state = { ...char.state, fsm: transition.nextState };
+  private async evaluateAndAct(agent: Agent, event: EngineEvent): Promise<void> {
+    const transition = evaluateFSM(event, agent.state, agent.config);
+    agent.state = { ...agent.state, fsm: transition.nextState };
 
-    // Handle transitions
     switch (transition.action) {
-      case 'emote':
-        this.handleEmote(char, transition.emoteCategory ?? 'idle');
+      case "signal":
+        this.handleStatusSignal(agent, transition.signalCategory ?? "idle");
         break;
 
-      case 'respond':
-      case 'initiate':
-        await this.handleResponse(char);
+      case "respond":
+      case "initiate":
+        await this.handleResponse(agent);
         break;
 
-      case 'none':
+      case "none":
       default:
         break;
     }
 
-    // Emit state change if the FSM state or anything observable changed
-    this.eventBus.emit('stateChange', char.config.name, { ...char.state });
+    this.eventBus.emit("stateChange", agent.config.name, { ...agent.state });
   }
 
-  // ── Emoting ────────────────────────────────────────────────────────────
+  // ── Status signals ────────────────────────────────────────────────────
 
-  private handleEmote(char: Character, category: string): void {
-    const emoteList = char.config.emotes[category] ?? char.config.emotes['idle'] ?? ['...'];
-    const emote = emoteList[Math.floor(Math.random() * emoteList.length)];
+  private handleStatusSignal(agent: Agent, category: string): void {
+    const signalList = agent.config.statusSignals[category] ??
+      agent.config.statusSignals["idle"] ?? ["..."];
+    const signal = signalList[Math.floor(Math.random() * signalList.length)];
 
     const msg: RoomMessage = {
       id: uuid(),
-      type: 'emote',
-      from: char.config.name,
-      content: emote,
+      type: "status_signal",
+      from: agent.config.name,
+      content: signal,
       timestamp: Date.now(),
     };
 
     this.addMessage(msg);
 
-    // Deduct emote energy and transition back to IDLE
-    char.state = {
-      ...char.state,
-      fsm: 'IDLE',
-      energy: Math.max(0, char.state.energy - char.config.energy.emoteCost),
+    agent.state = {
+      ...agent.state,
+      fsm: "IDLE",
+      energy: Math.max(0, agent.state.energy - agent.config.energy.statusCost),
       lastSpoke: Date.now(),
     };
   }
 
-  // ── Responding (async API bridge) ──────────────────────────────────────
+  // ── Responding (async API bridge) ─────────────────────────────────────
 
-  private async handleResponse(char: Character): Promise<void> {
+  private async handleResponse(agent: Agent): Promise<void> {
     if (!this.responseHandler) {
-      // No handler registered — fall back to IDLE
-      char.state = { ...char.state, fsm: 'IDLE' };
+      agent.state = { ...agent.state, fsm: "IDLE" };
       return;
     }
 
-    char.state = { ...char.state, fsm: 'RESPONDING' };
-    this.eventBus.emit('stateChange', char.config.name, { ...char.state });
+    agent.state = { ...agent.state, fsm: "RESPONDING" };
+    this.eventBus.emit("stateChange", agent.config.name, { ...agent.state });
 
     try {
-      const context = this.messages.slice(-20); // recent context window
-      const responseContent = await this.responseHandler(char, context);
+      const context = this.messages.slice(-20);
+      const responseContent = await this.responseHandler(agent, context);
 
       const msg: RoomMessage = {
         id: uuid(),
-        type: 'message',
-        from: char.config.name,
+        type: "message",
+        from: agent.config.name,
         content: responseContent,
         timestamp: Date.now(),
       };
 
       this.addMessage(msg);
 
-      // Append to character's conversation history
-      char.history.push({ role: 'assistant', content: responseContent });
+      agent.history.push({ role: "assistant", content: responseContent });
 
-      // Transition to COOLDOWN, deduct energy, reset boredom
-      char.state = {
-        ...char.state,
-        fsm: 'COOLDOWN',
-        energy: Math.max(0, char.state.energy - char.config.energy.responseCost),
-        cooldownRemaining: char.config.cooldownTicks,
-        boredom: 0,
+      agent.state = {
+        ...agent.state,
+        fsm: "COOLDOWN",
+        energy: Math.max(0, agent.state.energy - agent.config.energy.responseCost),
+        cooldownRemaining: agent.config.cooldownTicks,
+        initiative: 0,
         lastSpoke: Date.now(),
       };
     } catch {
-      // API error — transition back to IDLE so the character isn't stuck
-      char.state = { ...char.state, fsm: 'IDLE' };
+      agent.state = { ...agent.state, fsm: "IDLE" };
     }
 
-    this.eventBus.emit('stateChange', char.config.name, { ...char.state });
+    this.eventBus.emit("stateChange", agent.config.name, { ...agent.state });
+  }
+
+  // ── Completion checking ───────────────────────────────────────────────
+
+  private checkCompletion(tickEvent: EngineEvent): void {
+    if (this._status !== "running") return;
+
+    const conditions = this.completionConditions;
+
+    if (
+      conditions.maxTicks &&
+      tickEvent.type === "tick" &&
+      tickEvent.tickNumber >= conditions.maxTicks
+    ) {
+      this.complete();
+      return;
+    }
+
+    const messageCount = this.messages.filter((m) => m.type === "message").length;
+    if (conditions.maxMessages && messageCount >= conditions.maxMessages) {
+      this.complete();
+      return;
+    }
+
+    if (conditions.maxDurationMs && this.startedAt) {
+      if (Date.now() - this.startedAt >= conditions.maxDurationMs) {
+        this.complete();
+        return;
+      }
+    }
+  }
+
+  private complete(): void {
+    this._status = "completed";
+    this.clock.stop();
+    this.eventBus.removeAllListeners();
+    this.completionHandler?.(this);
   }
 }
