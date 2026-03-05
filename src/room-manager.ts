@@ -65,8 +65,7 @@ export class RoomManager {
     }
 
     // Wire response handler
-    room.onNeedResponse(async (agent, context) => {
-      const isInitiation = agent.state.initiative >= agent.config.initiative.threshold;
+    room.onNeedResponse(async (agent, context, isInitiation) => {
       const response = await this.runtime.getResponse(agent, context, isInitiation);
 
       // Log to telemetry
@@ -205,6 +204,8 @@ export class RoomManager {
         fsm: agent.state.fsm,
         energy: agent.state.energy,
         initiative: agent.state.initiative,
+        thinkingTicks: agent.state.thinkingTicks,
+        toolTier: agent.config.toolTier,
       })),
       messages: room.getMessages(),
       sceneState: sceneState

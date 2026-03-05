@@ -24,6 +24,8 @@ const defaultConfig: AgentConfig = {
   },
   cooldownTicks: 2,
   statusSignals: { idle: ["[analyzing...]"], contextual: ["[reviewing context]"] },
+  toolTier: "none",
+  thinkingTolerance: 40,
 };
 
 const defaultState: AgentState = {
@@ -34,6 +36,7 @@ const defaultState: AgentState = {
   cooldownRemaining: 0,
   lastSpoke: 0,
   attention: [],
+  thinkingTicks: 0,
 };
 
 describe("evaluateFSM", () => {
@@ -123,9 +126,29 @@ describe("evaluateFSM", () => {
     expect(result.nextState).toBe("IDLE");
   });
 
-  it("stays RESPONDING while in RESPONDING state", () => {
-    const responding = { ...defaultState, fsm: "RESPONDING" as const };
+  it("stays RESPONDING while thinkingTicks below tolerance", () => {
+    const responding = { ...defaultState, fsm: "RESPONDING" as const, thinkingTicks: 5 };
     const event: EngineEvent = { type: "tick", tickNumber: 5, timestamp: Date.now() };
+    const result = evaluateFSM(event, responding, defaultConfig);
+    expect(result.nextState).toBe("RESPONDING");
+  });
+
+  it("transitions RESPONDING → COOLDOWN on watchdog timeout", () => {
+    const responding = { ...defaultState, fsm: "RESPONDING" as const, thinkingTicks: 40 };
+    const event: EngineEvent = { type: "tick", tickNumber: 50, timestamp: Date.now() };
+    const result = evaluateFSM(event, responding, defaultConfig);
+    expect(result.nextState).toBe("COOLDOWN");
+    expect(result.action).toBe("timeout");
+  });
+
+  it("stays RESPONDING on non-tick events regardless of thinkingTicks", () => {
+    const responding = { ...defaultState, fsm: "RESPONDING" as const, thinkingTicks: 100 };
+    const event: EngineEvent = {
+      type: "message",
+      from: "user",
+      content: "hello",
+      timestamp: Date.now(),
+    };
     const result = evaluateFSM(event, responding, defaultConfig);
     expect(result.nextState).toBe("RESPONDING");
   });
@@ -172,5 +195,17 @@ describe("tickState", () => {
     const state = { ...defaultState, mood: 0.5 };
     const next = tickState(state, defaultConfig);
     expect(next.mood).toBe(0.49);
+  });
+
+  it("increments thinkingTicks when in RESPONDING", () => {
+    const state = { ...defaultState, fsm: "RESPONDING" as const, thinkingTicks: 3 };
+    const next = tickState(state, defaultConfig);
+    expect(next.thinkingTicks).toBe(4);
+  });
+
+  it("resets thinkingTicks to 0 when not in RESPONDING", () => {
+    const state = { ...defaultState, fsm: "IDLE" as const, thinkingTicks: 5 };
+    const next = tickState(state, defaultConfig);
+    expect(next.thinkingTicks).toBe(0);
   });
 });

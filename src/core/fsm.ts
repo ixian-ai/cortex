@@ -18,7 +18,7 @@ export function evaluateFSM(
       return evaluateIdle(event, state, config, hasEnergy);
 
     case "RESPONDING":
-      return { nextState: "RESPONDING" };
+      return evaluateResponding(event, state, config);
 
     case "STATUS_SIGNAL":
       return { nextState: "STATUS_SIGNAL" };
@@ -88,6 +88,23 @@ function evaluateIdle(
   }
 }
 
+function evaluateResponding(
+  event: EngineEvent,
+  state: AgentState,
+  config: AgentConfig,
+): FSMTransition {
+  if (event.type !== "tick") {
+    return { nextState: "RESPONDING" };
+  }
+
+  // Watchdog: if thinkingTicks exceeds tolerance, force exit
+  if (state.thinkingTicks >= config.thinkingTolerance) {
+    return { nextState: "COOLDOWN", action: "timeout" };
+  }
+
+  return { nextState: "RESPONDING" };
+}
+
 function evaluateCooldown(event: EngineEvent, state: AgentState): FSMTransition {
   if (event.type === "tick") {
     const remaining = state.cooldownRemaining - 1;
@@ -111,6 +128,7 @@ export function tickState(state: AgentState, config: AgentConfig): AgentState {
     initiative: state.initiative + config.initiative.increaseRate,
     cooldownRemaining: Math.max(0, state.cooldownRemaining - 1),
     mood: decayTowardZero(state.mood, 0.01),
+    thinkingTicks: state.fsm === "RESPONDING" ? state.thinkingTicks + 1 : 0,
   };
 }
 

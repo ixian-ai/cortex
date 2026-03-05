@@ -20,6 +20,8 @@ const testAgent: AgentConfig = {
   initiative: { threshold: 100, increaseRate: 0 },
   cooldownTicks: 2,
   statusSignals: { idle: ["[waiting]"] },
+  toolTier: "none",
+  thinkingTolerance: 40,
 };
 
 const testScene: SceneConfig = {

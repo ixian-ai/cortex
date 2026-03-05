@@ -6,6 +6,7 @@ import type {
   AgentState,
   CompletionConditions,
   EngineEvent,
+  PendingResponse,
   RoomConfig,
   RoomMessage,
   RoomStatus,
@@ -22,13 +23,14 @@ import {
   tickSceneState,
 } from "./scene-engine.js";
 
-type ResponseHandler = (agent: Agent, context: RoomMessage[]) => Promise<string>;
+type ResponseHandler = (agent: Agent, context: RoomMessage[], isInitiation: boolean) => Promise<string>;
 type OrchestratorResponseHandler = (
   sceneConfig: SceneConfig,
   sceneState: SceneState,
   recentMessages: RoomMessage[],
 ) => Promise<string>;
 type CompletionHandler = (room: Room) => void;
+type TimeoutHandler = (agentName: string, thinkingTicks: number) => void;
 
 /**
  * The Room — central state manager and heart of the engine.
@@ -46,6 +48,8 @@ export class Room {
   private responseHandler: ResponseHandler | null = null;
   private orchestratorResponseHandler: OrchestratorResponseHandler | null = null;
   private completionHandler: CompletionHandler | null = null;
+  private timeoutHandler: TimeoutHandler | null = null;
+  private pendingResponses: PendingResponse[] = [];
   private startedAt: number | null = null;
   private _status: RoomStatus = "pending";
 
@@ -92,6 +96,7 @@ export class Room {
       cooldownRemaining: 0,
       lastSpoke: 0,
       attention: [],
+      thinkingTicks: 0,
     };
 
     this.agents.set(config.name, {
@@ -206,6 +211,18 @@ export class Room {
     this.completionHandler = handler;
   }
 
+  onTimeout(handler: TimeoutHandler): void {
+    this.timeoutHandler = handler;
+  }
+
+  /**
+   * Queue a completed tool-use response for next-tick processing.
+   * Called by the async runtime when a tool-use loop finishes.
+   */
+  queueResponse(response: PendingResponse): void {
+    this.pendingResponses.push(response);
+  }
+
   // ── Event handling ────────────────────────────────────────────────────
 
   private handleEvent(event: EngineEvent): void {
@@ -215,6 +232,9 @@ export class Room {
   }
 
   private async handleTick(tickEvent: EngineEvent): Promise<void> {
+    // 0. Process pending responses from async tool-use loops (drain queue)
+    this.drainPendingResponses();
+
     // 1. Update internal state for each agent
     for (const [, agent] of this.agents) {
       agent.state = tickState(agent.state, agent.config);
@@ -324,6 +344,42 @@ export class Room {
     }
   }
 
+  // ── Pending response queue ──────────────────────────────────────────
+
+  private drainPendingResponses(): void {
+    while (this.pendingResponses.length > 0) {
+      const response = this.pendingResponses.shift()!;
+      const agent = this.agents.get(response.agentName);
+      if (!agent) continue;
+
+      // Only process if agent is still in RESPONDING
+      if (agent.state.fsm !== "RESPONDING") continue;
+
+      const msg: RoomMessage = {
+        id: uuid(),
+        type: "message",
+        from: agent.config.name,
+        content: response.content,
+        timestamp: Date.now(),
+      };
+
+      this.addMessage(msg);
+
+      agent.state = {
+        ...agent.state,
+        fsm: "COOLDOWN",
+        energy: Math.max(0, agent.state.energy - agent.config.energy.responseCost),
+        cooldownRemaining: agent.config.cooldownTicks,
+        initiative: 0,
+        lastSpoke: Date.now(),
+        thinkingTicks: 0,
+        thinkingIntent: undefined,
+      };
+
+      this.eventBus.emit("stateChange", agent.config.name, { ...agent.state });
+    }
+  }
+
   // ── FSM evaluation and action dispatch ────────────────────────────────
 
   private async evaluateAndAct(agent: Agent, event: EngineEvent): Promise<void> {
@@ -336,8 +392,15 @@ export class Room {
         break;
 
       case "respond":
+        await this.handleResponse(agent, false);
+        break;
+
       case "initiate":
-        await this.handleResponse(agent);
+        await this.handleResponse(agent, true);
+        break;
+
+      case "timeout":
+        this.handleTimeout(agent);
         break;
 
       case "none":
@@ -375,18 +438,23 @@ export class Room {
 
   // ── Responding (async API bridge) ─────────────────────────────────────
 
-  private async handleResponse(agent: Agent): Promise<void> {
+  private async handleResponse(agent: Agent, isInitiation: boolean): Promise<void> {
     if (!this.responseHandler) {
       agent.state = { ...agent.state, fsm: "IDLE" };
       return;
     }
 
-    agent.state = { ...agent.state, fsm: "RESPONDING" };
+    agent.state = {
+      ...agent.state,
+      fsm: "RESPONDING",
+      thinkingTicks: 0,
+      thinkingIntent: isInitiation ? "initiating" : "responding",
+    };
     this.eventBus.emit("stateChange", agent.config.name, { ...agent.state });
 
     try {
       const context = this.messages.slice(-20);
-      const responseContent = await this.responseHandler(agent, context);
+      const responseContent = await this.responseHandler(agent, context, isInitiation);
 
       const msg: RoomMessage = {
         id: uuid(),
@@ -398,8 +466,6 @@ export class Room {
 
       this.addMessage(msg);
 
-      agent.history.push({ role: "assistant", content: responseContent });
-
       agent.state = {
         ...agent.state,
         fsm: "COOLDOWN",
@@ -407,12 +473,39 @@ export class Room {
         cooldownRemaining: agent.config.cooldownTicks,
         initiative: 0,
         lastSpoke: Date.now(),
+        thinkingTicks: 0,
+        thinkingIntent: undefined,
       };
     } catch {
-      agent.state = { ...agent.state, fsm: "IDLE" };
+      agent.state = { ...agent.state, fsm: "IDLE", thinkingTicks: 0, thinkingIntent: undefined };
     }
 
     this.eventBus.emit("stateChange", agent.config.name, { ...agent.state });
+  }
+
+  private handleTimeout(agent: Agent): void {
+    // Emit a timeout status signal
+    const msg: RoomMessage = {
+      id: uuid(),
+      type: "status_signal",
+      from: agent.config.name,
+      content: `[timed out after ${agent.state.thinkingTicks} ticks]`,
+      timestamp: Date.now(),
+    };
+    this.addMessage(msg);
+
+    // Drain energy and enter cooldown
+    agent.state = {
+      ...agent.state,
+      fsm: "COOLDOWN",
+      energy: Math.max(0, agent.state.energy - agent.config.energy.responseCost),
+      cooldownRemaining: agent.config.cooldownTicks,
+      initiative: 0,
+      thinkingTicks: 0,
+      thinkingIntent: undefined,
+    };
+
+    this.timeoutHandler?.(agent.config.name, agent.state.cooldownRemaining);
   }
 
   // ── Completion checking ───────────────────────────────────────────────
