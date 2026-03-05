@@ -16,6 +16,8 @@ const config: AgentConfig = {
   initiative: { threshold: 5, increaseRate: 0.5 },
   cooldownTicks: 2,
   statusSignals: { idle: ["..."] },
+  toolTier: "none",
+  thinkingTolerance: 40,
 };
 
 describe("evaluateRelevance", () => {

@@ -34,9 +34,12 @@ export function profileToAgentConfig(profile: AgentProfileRow): AgentConfig {
       increaseRate: ((meta.initiative as Record<string, unknown>)?.increaseRate as number) ?? 0.5,
     },
     cooldownTicks: (meta.cooldownTicks as number) ?? 2,
+    toolTier: (meta.toolTier as "none" | "phone" | "desktop") ?? "phone",
+    thinkingTolerance: (meta.thinkingTolerance as number) ?? 40,
     statusSignals: {
       idle: ["[analyzing...]", "[reviewing context]"],
       contextual: ["[processing...]", "[considering approach]"],
+      thinking: ["[researching...]", "[looking this up...]", "[checking sources...]"],
     },
   };
 }

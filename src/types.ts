@@ -16,8 +16,27 @@ export type EngineEvent =
 // What the FSM decides to do
 export interface FSMTransition {
   nextState: FSMState;
-  action?: "respond" | "signal" | "initiate" | "none";
+  action?: "respond" | "signal" | "initiate" | "timeout" | "none";
   signalCategory?: string;
+}
+
+// Tool access tiers — phone is fast/constrained, desktop is powerful/expensive
+export type ToolTier = "none" | "phone" | "desktop";
+
+// Per-tool constraints enforced by the runtime
+export interface ToolConstraints {
+  timeoutMs: number;
+  maxResponseTokens?: number;
+  maxResults?: number;
+}
+
+// Tool definition for agent tool-use loops
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  tier: ToolTier;
+  constraints: ToolConstraints;
+  inputSchema: Record<string, unknown>;
 }
 
 // Agent configuration — resolved from pg agent_profiles or composed by University
@@ -27,6 +46,8 @@ export interface AgentConfig {
   model: string;
   maxTokens: number;
   systemPrompt: string;
+  toolTier: ToolTier;
+  thinkingTolerance: number; // max ticks in RESPONDING before watchdog fires
   triggers: {
     watchwords: string[];
     prioritySignals: string[];
@@ -55,6 +76,19 @@ export interface AgentState {
   cooldownRemaining: number;
   lastSpoke: number;
   attention: string[];
+  thinkingTicks: number; // ticks spent in RESPONDING (watchdog counter)
+  thinkingIntent?: string; // what the agent is doing: "researching", "analyzing", etc.
+}
+
+// Result of a completed tool-use loop, queued for next-tick processing
+export interface PendingResponse {
+  agentName: string;
+  content: string;
+  toolCalls: number;
+  tokensIn: number;
+  tokensOut: number;
+  durationMs: number;
+  timedOut: boolean;
 }
 
 // An agent instance = config + state + conversation history
